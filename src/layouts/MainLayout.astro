@@ -1,0 +1,60 @@
+---
+import "../styles/global.css";
+
+interface Props {
+	title: string;
+}
+
+const { title } = Astro.props;
+---
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="description" content="Astro description">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<meta name="generator" content={Astro.generator} />
+		<title>{title}</title>
+        {/* Font Awesome for Icons */}
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+        
+        {/* Telegram Mini App Script */}
+        <script src="https://telegram.org/js/telegram-web-app.js"></script>
+	</head>
+	<body>
+		<div class="container">
+			<slot />
+		</div>
+
+        <script is:inline>
+            // This small, inline script runs immediately to prevent a flash of the wrong theme.
+            function applyTheme() {
+                try {
+                    const tg = window.Telegram.WebApp;
+                    if (tg.colorScheme === 'dark') {
+                        document.documentElement.classList.add('dark');
+                        document.documentElement.classList.remove('light');
+                    } else {
+                        document.documentElement.classList.add('light');
+                        document.documentElement.classList.remove('dark');
+                    }
+                } catch (error) {
+                    // Fallback for when not in Telegram
+                    console.log("Not in Telegram, defaulting to light theme.");
+                    document.documentElement.classList.add('light');
+                }
+            }
+            
+            // Apply theme on initial load
+            applyTheme();
+
+            // Also listen for theme changes from Telegram
+            try {
+                window.Telegram.WebApp.onEvent('themeChanged', applyTheme);
+            } catch (error) {
+                // Not in Telegram, no need to listen for changes
+            }
+        </script>
+	</body>
+</html>

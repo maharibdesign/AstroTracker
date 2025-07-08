@@ -1,0 +1,48 @@
+---
+import MainLayout from '../layouts/MainLayout.astro';
+import Header from '../components/Header.astro';
+import Controls from '../components/Controls.astro';
+import ProgressSummary from '../components/ProgressSummary.astro';
+import DayCard from '../components/DayCard.astro';
+import Footer from '../components/Footer.astro';
+import type { DayData } from '../scripts/main';
+
+// This function runs on the server (or at build time) to create initial state.
+// In a real app, this could fetch from a database. Here, we create defaults.
+function getInitialData(): DayData[] {
+    const TOTAL_DAYS = 30;
+    const createDefaultDay = (day: number): DayData => {
+        const date = new Date();
+        date.setDate(date.getDate() + day - 1); // Set date for each day
+        return {
+            day: day,
+            date: date.toISOString().split('T')[0],
+            fitness: { workout: false, pushups: 0, creatine: false },
+            nutrition: { breakfast: false, lunch: false, dinner: false, snack: false },
+            hydration: { intake: 0 },
+            selfCare: { skinAM: false, skinPM: false, prayerAM: false, prayerPM: false },
+            wellness: { sleep: 7, es: false, energy: null },
+            digestiveHealth: { bloating: false, constipation: false, acidPain: false }
+        };
+    };
+    return Array.from({ length: TOTAL_DAYS }, (_, i) => createDefaultDay(i + 1));
+}
+
+const initialTrackerData = getInitialData();
+---
+
+<MainLayout title="AstroTracker: 30-Day Transformation">
+    <Header />
+    <main>
+        <Controls />
+        <ProgressSummary />
+        <div class="tracker-container" id="trackerContainer">
+            {initialTrackerData.map((dayData, index) => (
+                <DayCard dayData={dayData} isCollapsed={index > 2} />
+            ))}
+        </div>
+    </main>
+    <Footer />
+</MainLayout>
+
+<script src="../scripts/main.ts"></script>

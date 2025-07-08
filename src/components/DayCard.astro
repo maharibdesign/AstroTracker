@@ -1,0 +1,123 @@
+---
+import type { DayData } from '../scripts/main';
+interface Props {
+    dayData: DayData;
+    isCollapsed: boolean;
+}
+
+const { dayData, isCollapsed } = Astro.props;
+const { day, date, fitness, nutrition, hydration, selfCare, wellness, digestiveHealth } = dayData;
+---
+<div class={`day-card ${isCollapsed ? 'collapsed' : ''}`} data-day={day}>
+    <header class="day-header">
+        <h3>Day {day}</h3>
+        <div class="toggle-icon">
+            <i class="fas fa-chevron-down"></i>
+        </div>
+    </header>
+
+    <div class="day-body">
+        <div class="track-section">
+            <input type="date" class="date-input" value={date} data-input="date">
+        </div>
+
+        <!-- Fitness -->
+        <div class="track-section">
+            <h4 class="section-title"><i class="fas fa-dumbbell"></i> Fitness</h4>
+            <div class="track-grid">
+                <div class="track-item checkbox-container" data-input="fitness.workout">
+                    <div class:list={["custom-checkbox", { "checked": fitness.workout }]}></div>
+                    <span class="checkbox-label">Workout</span>
+                </div>
+                <div class="track-item checkbox-container" data-input="fitness.creatine">
+                    <div class:list={["custom-checkbox", { "checked": fitness.creatine }]}></div>
+                    <span class="checkbox-label">Creatine</span>
+                </div>
+                <div class="track-item">
+                    <span>Push-ups:</span>
+                    <input type="number" class="number-input" min="0" value={fitness.pushups} data-input="fitness.pushups">
+                </div>
+            </div>
+        </div>
+        
+        <!-- Nutrition -->
+        <div class="track-section">
+            <h4 class="section-title"><i class="fas fa-utensils"></i> Nutrition</h4>
+            <div class="track-grid">
+                 {Object.entries(nutrition).map(([meal, checked]) => (
+                    <div class="track-item checkbox-container" data-input={`nutrition.${meal}`}>
+                        <div class:list={["custom-checkbox", { "checked": checked }]}></div>
+                        <span class="checkbox-label">{meal.charAt(0).toUpperCase() + meal.slice(1)}</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+        
+        <!-- Hydration -->
+        <div class="track-section">
+            <h4 class="section-title"><i class="fas fa-tint"></i> Hydration</h4>
+            <div class="water-tracker">
+                <input type="range" min="0" max="2.5" step="0.1" value={hydration.intake} class="water-slider" data-input="hydration.intake">
+                <span class="water-text">{hydration.intake.toFixed(1)}/2.5L</span>
+            </div>
+        </div>
+        
+        <!-- Self-Care -->
+        <div class="track-section">
+            <h4 class="section-title"><i class="fas fa-spa"></i> Self-Care</h4>
+            <div class="track-grid">
+                <div class="track-item checkbox-container" data-input="selfCare.skinAM">
+                    <div class:list={["custom-checkbox", { "checked": selfCare.skinAM }]}></div>
+                    <span class="checkbox-label">Skin AM</span>
+                </div>
+                <div class="track-item checkbox-container" data-input="selfCare.skinPM">
+                    <div class:list={["custom-checkbox", { "checked": selfCare.skinPM }]}></div>
+                    <span class="checkbox-label">Skin PM</span>
+                </div>
+                <div class="track-item checkbox-container" data-input="selfCare.prayerAM">
+                    <div class:list={["custom-checkbox", { "checked": selfCare.prayerAM }]}></div>
+                    <span class="checkbox-label">Prayer AM</span>
+                </div>
+                <div class="track-item checkbox-container" data-input="selfCare.prayerPM">
+                    <div class:list={["custom-checkbox", { "checked": selfCare.prayerPM }]}></div>
+                    <span class="checkbox-label">Prayer PM</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Wellness -->
+        <div class="track-section">
+            <h4 class="section-title"><i class="fas fa-bed"></i> Wellness</h4>
+            <div class="track-grid">
+                <div class="track-item">
+                    <span>Sleep (hrs):</span>
+                    <input type="number" class="number-input" min="0" max="16" step="0.5" value={wellness.sleep} data-input="wellness.sleep">
+                </div>
+                <div class="track-item checkbox-container" data-input="wellness.es">
+                     <div class:list={["custom-checkbox", { "checked": wellness.es }]}></div>
+                    <span class="checkbox-label">ES</span>
+                </div>
+                <div class="track-item">
+                    <span>Energy After:</span>
+                    <div class="emoji-selector" data-input-group="wellness.energy">
+                        <div class:list={["emoji-option", { "selected": wellness.energy === 'high' }]} data-value="high">😊</div>
+                        <div class:list={["emoji-option", { "selected": wellness.energy === 'medium' }]} data-value="medium">😐</div>
+                        <div class:list={["emoji-option", { "selected": wellness.energy === 'low' }]} data-value="low">😩</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Digestive Health -->
+        <div class="track-section">
+            <h4 class="section-title"><i class="fas fa-leaf"></i> Digestive Health</h4>
+            <div class="tag-selector" data-input-group="digestiveHealth">
+                {Object.entries(digestiveHealth).map(([symptom, selected]) => (
+                    <div class:list={["tag-option", { "selected": selected }]} data-input={`digestiveHealth.${symptom}`}>
+                        {symptom.charAt(0).toUpperCase() + symptom.slice(1).replace(/([A-Z])/g, ' $1').trim()}
+                    </div>
+                ))}
+            </div>
+        </div>
+    </div>
+</div>
