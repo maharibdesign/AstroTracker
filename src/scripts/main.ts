@@ -38,7 +38,6 @@ class AstroTrackerApp {
         try {
             const tg = window.Telegram.WebApp;
             tg.ready();
-            // Listen for theme changes from Telegram in real-time
             tg.onEvent('themeChanged', () => this.handleThemeChangeFromTelegram());
         } catch (e) {
             console.log("Telegram Web App not found, running in standalone mode.");
@@ -59,8 +58,6 @@ class AstroTrackerApp {
     }
     
     private handleThemeChangeFromTelegram() {
-        // When Telegram changes the theme, we update the UI but DON'T save to localStorage
-        // This allows the user's manual toggle to override the Telegram theme.
         try {
             this.applyTheme(window.Telegram.WebApp.colorScheme);
         } catch(e) { /* Failsafe */ }
@@ -106,7 +103,7 @@ class AstroTrackerApp {
     private resetData() {
         if (confirm('Are you sure you want to reset all data? This cannot be undone.')) {
             localStorage.removeItem('AstroTrackerData');
-            localStorage.removeItem('AstroTrackerTheme'); // Also reset theme preference
+            localStorage.removeItem('AstroTrackerTheme');
             window.location.reload();
         }
     }
@@ -264,7 +261,7 @@ class AstroTrackerApp {
         (document.getElementById(`${metric}Bar`) as HTMLElement)!.style.width = `${Math.min(barPercent, 100)}%`;
     }
 
-    // --- PDF EXPORT ---
+    // --- PDF EXPORT (UPDATED) ---
     private exportToPDF() {
         this.showNotification('Generating PDF report...', 'info');
         const doc = new jsPDF();
@@ -293,14 +290,30 @@ class AstroTrackerApp {
             headStyles: { fillColor: [44, 62, 80] }
         });
         
-        const pdfDataUri = doc.output('dataurlstring');
-        
-        const downloadLink = document.createElement('a');
-        downloadLink.href = pdfDataUri;
-        downloadLink.download = 'AstroTracker-Report.pdf';
-        document.body.appendChild(downloadLink);
-        downloadLink.click();
-        document.body.removeChild(downloadLink);
+        // --- NEW CONDITIONAL LOGIC ---
+        try {
+            // Check if running inside Telegram
+            if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openLink) {
+                // For Telegram: Generate blob and open in external browser
+                const pdfBlob = doc.output('blob');
+                const pdfUrl = URL.createObjectURL(pdfBlob);
+                window.Telegram.WebApp.openLink(pdfUrl, { try_instant_view: false });
+                this.showNotification('Opening download in browser...', 'success');
+            } else {
+                // Fallback for standard browsers
+                throw new Error("Not in Telegram, using standard download.");
+            }
+        } catch (error) {
+            // Standard browser download method
+            console.log(error); // Log the reason for fallback
+            const pdfDataUri = doc.output('dataurlstring');
+            const downloadLink = document.createElement('a');
+            downloadLink.href = pdfDataUri;
+            downloadLink.download = 'AstroTracker-Report.pdf';
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+        }
     }
 
     // --- UTILITIES ---
