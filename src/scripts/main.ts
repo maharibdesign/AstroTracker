@@ -357,7 +357,7 @@ class AstroTrackerApp {
     }
 }
 
-// Instantiate the app once the DOM is ready
+//   Instantiate the app once the DOM is ready
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => new AstroTrackerApp());
 } else {
