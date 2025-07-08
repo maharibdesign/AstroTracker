@@ -9,10 +9,10 @@
     "astro": "astro"
   },
   "dependencies": {
-    "@astrojs/vercel": "^8.2.1",
     "astro": "^5.11.0",
     "form-data": "^4.0.3",
     "jspdf": "^3.0.1",
-    "jspdf-autotable": "^5.0.2"
+    "jspdf-autotable": "^5.0.2",
+    "node-fetch": "^3.3.2"
   }
 }

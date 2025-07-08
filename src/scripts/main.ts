@@ -36,7 +36,6 @@ class AstroTrackerApp {
     }
 
     private initTelegram() {
-        // FIX: Explicitly check for window.Telegram before using it.
         if (window.Telegram) {
             try {
                 const tg = window.Telegram.WebApp;
@@ -64,7 +63,6 @@ class AstroTrackerApp {
     }
     
     private handleThemeChangeFromTelegram() {
-        // FIX: Explicitly check for window.Telegram before using it.
         if (window.Telegram) {
             try {
                 this.applyTheme(window.Telegram.WebApp.colorScheme);
@@ -296,12 +294,12 @@ class AstroTrackerApp {
         });
 
         try {
-            // FIX: Explicitly check for Telegram and user ID before proceeding.
             if (window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
                 // --- TELEGRAM MINI APP LOGIC ---
                 const userId = window.Telegram.WebApp.initDataUnsafe.user.id.toString();
                 const pdfBase64 = doc.output('datauristring').split(',')[1];
                 
+                // Note the API path is now just /api/send-pdf
                 const response = await fetch('/api/send-pdf', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
