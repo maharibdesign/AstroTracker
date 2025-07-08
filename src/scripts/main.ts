@@ -22,6 +22,7 @@ export interface DayData {
 class AstroTrackerApp {
     private trackerData: DayData[] = [];
     private isDirty = false;
+    private isExporting = false; // To prevent multiple clicks while exporting
     private readonly TOTAL_DAYS = 30;
     private readonly WATER_GOAL = 2.5;
     private readonly SLEEP_GOAL = 8;
@@ -261,52 +262,63 @@ class AstroTrackerApp {
         (document.getElementById(`${metric}Bar`) as HTMLElement)!.style.width = `${Math.min(barPercent, 100)}%`;
     }
 
-    // --- PDF EXPORT (UPDATED) ---
-    private exportToPDF() {
+    // --- PDF EXPORT (FINAL VERSION) ---
+    private async exportToPDF() {
+        if (this.isExporting) return; // Prevent multiple clicks
+        this.isExporting = true;
         this.showNotification('Generating PDF report...', 'info');
+
+        const exportBtn = document.getElementById('exportBtn') as HTMLButtonElement;
+        if(exportBtn) exportBtn.disabled = true;
+
         const doc = new jsPDF();
-        
         doc.setFontSize(18);
         doc.text("AstroTracker: 30-Day Transformation Report", 14, 22);
         doc.setFontSize(11);
         doc.setTextColor(100);
         doc.text(`Report generated on: ${new Date().toLocaleDateString()}`, 14, 29);
-
         const tableData = this.trackerData.map(day => [
-            day.day,
-            day.date,
-            day.fitness.workout ? '✅' : '—',
-            day.fitness.pushups,
-            day.hydration.intake.toFixed(1),
-            day.wellness.sleep.toFixed(1),
+            day.day, day.date, day.fitness.workout ? '✅' : '—', day.fitness.pushups,
+            day.hydration.intake.toFixed(1), day.wellness.sleep.toFixed(1),
             Object.values(day.digestiveHealth).filter(Boolean).length ? 'Yes' : 'No'
         ]);
-
         autoTable(doc, {
-            startY: 35,
-            head: [['Day', 'Date', 'Workout', 'Push-ups', 'Water (L)', 'Sleep (h)', 'Symptoms']],
-            body: tableData,
-            theme: 'grid',
-            headStyles: { fillColor: [44, 62, 80] }
+            startY: 35, head: [['Day', 'Date', 'Workout', 'Push-ups', 'Water (L)', 'Sleep (h)', 'Symptoms']],
+            body: tableData, theme: 'grid', headStyles: { fillColor: [44, 62, 80] }
         });
-        
-        // --- FINAL, CORRECTED LOGIC ---
+
         try {
-            // Check if running inside Telegram
-            if (window.Telegram && window.Telegram.WebApp.openLink) {
-                // For Telegram: Generate a data URI and ask Telegram to open it.
-                // The external browser will handle the data URI and trigger a download.
-                const pdfDataUri = doc.output('dataurlstring');
-                window.Telegram.WebApp.openLink(pdfDataUri);
-                this.showNotification('Opening download in browser...', 'success');
+            if (window.Telegram && window.Telegram.WebApp.initDataUnsafe?.user?.id) {
+                // --- TELEGRAM MINI APP LOGIC ---
+                const userId = window.Telegram.WebApp.initDataUnsafe.user.id.toString();
+                // Get PDF as a Base64 string, removing the prefix
+                const pdfBase64 = doc.output('datauristring').split(',')[1];
+                
+                const response = await fetch('/api/send-pdf', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pdfBase64, userId }),
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Server responded with status: ${response.status}`);
+                }
+                
+                this.showNotification('Report sent to your chat!', 'success');
+                // Close the Mini App window for a great UX
+                window.Telegram.WebApp.close();
+
             } else {
-                // Fallback for standard browsers
                 throw new Error("Not in Telegram, using standard download.");
             }
         } catch (error) {
-            // Standard browser download method
-            console.log(error); // Log the reason for fallback
+            // --- STANDARD BROWSER FALLBACK LOGIC ---
+            console.error("Export failed, falling back to browser download:", error);
+            this.showNotification('Could not send to chat. Downloading directly.', 'info');
             doc.save('AstroTracker-Report.pdf');
+        } finally {
+            this.isExporting = false;
+            if(exportBtn) exportBtn.disabled = false;
         }
     }
 
