@@ -1,6 +1,4 @@
-// src/scripts/main.ts - Final Version with Supabase Backend Integration
-
-// Note: No need to import jspdf here, as generation is now fully on the backend.
+// src/scripts/main.ts - Final Version with Type-Safe Error Handling
 
 // --- TYPE DEFINITIONS ---
 type Theme = 'light' | 'dark';
@@ -31,15 +29,15 @@ class AstroTrackerApp {
     constructor() {
         this.initializeApp();
     }
-
+    
     private async initializeApp() {
         this.showNotification('Loading...', 'info');
-        this.attachEventListeners(); // Attach listeners immediately to a responsive UI
-        await this.loadData();      // Asynchronously load data from cloud or local
-        this.updateAllUI();         // Update the entire UI with the final data
+        this.attachEventListeners();
+        await this.loadData();
+        this.updateAllUI();
         this.initTelegram();
     }
-    
+
     private async loadData() {
         try {
             if (window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
@@ -48,14 +46,13 @@ class AstroTrackerApp {
                 if (response.ok) {
                     this.trackerData = await response.json();
                     this.showNotification('Progress loaded from cloud!', 'success');
-                    this.syncUIToData(); // Sync DOM with loaded data
+                    this.syncUIToData();
                     return;
                 }
             }
-            // If not in Telegram, or if fetch fails (e.g., new user), proceed to fallback.
-            throw new Error('Using local data.');
+            throw new Error('Using local data fallback.');
         } catch (error) {
-            console.warn("Could not load from cloud, using local fallback.", error);
+            console.warn(this.getErrorMessage(error));
             const savedData = localStorage.getItem('AstroTrackerData');
             if (savedData) {
                 this.trackerData = JSON.parse(savedData);
@@ -64,17 +61,15 @@ class AstroTrackerApp {
                 this.trackerData = Array.from({ length: this.TOTAL_DAYS }, (_, i) => this.createDefaultDay(i + 1));
                 this.showNotification('Welcome! Start your new journey.', 'info');
             }
-            this.syncUIToData(); // Sync DOM with local/default data
+            this.syncUIToData();
         }
     }
     
-    // This function ensures the UI elements reflect the current `trackerData` state.
     private syncUIToData() {
         this.trackerData.forEach(dayData => {
             const dayCard = document.querySelector(`.day-card[data-day="${dayData.day}"]`);
             if (!dayCard) return;
 
-            // Update simple input values
             (dayCard.querySelector('[data-input="date"]') as HTMLInputElement).value = dayData.date;
             (dayCard.querySelector('[data-input="fitness.pushups"]') as HTMLInputElement).value = dayData.fitness.pushups.toString();
             (dayCard.querySelector('[data-input="wellness.sleep"]') as HTMLInputElement).value = dayData.wellness.sleep.toString();
@@ -83,7 +78,6 @@ class AstroTrackerApp {
             const waterText = dayCard.querySelector('.water-text');
             if(waterText) waterText.textContent = `${dayData.hydration.intake.toFixed(1)}/2.5L`;
 
-            // Update checkboxes
             dayCard.querySelectorAll('.checkbox-container[data-input]').forEach(el => {
                 const inputPath = (el as HTMLElement).dataset.input!;
                 const [category, key] = inputPath.split('.') as [DayDataCategory, string];
@@ -91,7 +85,6 @@ class AstroTrackerApp {
                 el.querySelector('.custom-checkbox')?.classList.toggle('checked', !!value);
             });
             
-            // Update tag selectors
             dayCard.querySelectorAll('.tag-option[data-input]').forEach(el => {
                  const inputPath = (el as HTMLElement).dataset.input!;
                  const [category, key] = inputPath.split('.') as [DayDataCategory, string];
@@ -99,7 +92,6 @@ class AstroTrackerApp {
                  el.classList.toggle('selected', !!value);
             });
 
-            // Update emoji selectors
             dayCard.querySelectorAll('.emoji-option[data-value]').forEach(el => {
                  const value = (el as HTMLElement).dataset.value;
                  el.classList.toggle('selected', value === dayData.wellness.energy);
@@ -147,23 +139,15 @@ class AstroTrackerApp {
     }
 
     private async saveData() {
-        if (this.isSaving) return;
-        if (!this.isDirty) {
-            this.showNotification('No changes to save.', 'info');
-            return;
-        }
-
+        if (this.isSaving || !this.isDirty) return;
         this.isSaving = true;
         this.showNotification('Saving...', 'info');
         (document.getElementById('fixedSaveBtn') as HTMLButtonElement).disabled = true;
 
-        // Always save a local copy for speed and offline access
         localStorage.setItem('AstroTrackerData', JSON.stringify(this.trackerData));
         
         try {
-            if (!window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
-                throw new Error("Local save only."); // This error message is caught and handled below
-            }
+            if (!window.Telegram?.WebApp?.initDataUnsafe?.user?.id) throw new Error("Local save only.");
             const userId = window.Telegram.WebApp.initDataUnsafe.user.id.toString();
             
             const response = await fetch('/api/save-data', {
@@ -171,16 +155,19 @@ class AstroTrackerApp {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userId, trackerData: this.trackerData }),
             });
-            if (!response.ok) {
-                throw new Error('Failed to save data to cloud.');
-            }
+            if (!response.ok) throw new Error('Failed to save data to cloud.');
             
             this.isDirty = false;
             this.updateSaveButtonState();
             this.showNotification('Progress saved!', 'success');
         } catch (error) {
-            console.error("Save process finished with an issue:", error);
-            this.showNotification(error.message === 'Local save only.' ? 'Progress saved locally.' : 'Could not sync to cloud.', error.message === 'Local save only.' ? 'info' : 'error');
+            // FIX: Use the error handling helper
+            const errorMessage = this.getErrorMessage(error);
+            console.error("Save failed:", errorMessage);
+            this.showNotification(
+                errorMessage === 'Local save only.' ? 'Progress saved locally.' : 'Could not sync to cloud.',
+                errorMessage === 'Local save only.' ? 'info' : 'error'
+            );
         } finally {
             this.isSaving = false;
             (document.getElementById('fixedSaveBtn') as HTMLButtonElement).disabled = false;
@@ -214,26 +201,27 @@ class AstroTrackerApp {
                 const errorData = await response.json();
                 throw new Error(errorData.message || 'Failed to generate report.');
             }
-            this.showNotification('Report is being sent to your chat!', 'success');
+            this.showNotification('Report sent to your chat!', 'success');
             window.Telegram.WebApp.close();
         } catch (error) {
-            console.error("Export failed:", error);
-            // Don't show generic error for user-facing issues like "Unsaved changes."
-            if (error.message !== 'Unsaved changes.') {
-                 this.showNotification(error.message, 'error');
+            // FIX: Use the error handling helper
+            const errorMessage = this.getErrorMessage(error);
+            console.error("Export failed:", errorMessage);
+            if (errorMessage !== 'Unsaved changes.') {
+                 this.showNotification(errorMessage, 'error');
             }
         } finally {
             this.isExporting = false;
             if(exportBtn) exportBtn.disabled = false;
         }
     }
-    
+
     private resetData() {
         if (confirm('Are you sure you want to reset all data? This will clear cloud and local data.')) {
             this.trackerData = Array.from({ length: this.TOTAL_DAYS }, (_, i) => this.createDefaultDay(i + 1));
             localStorage.removeItem('AstroTrackerData');
-            this.isDirty = true; // Mark as dirty to trigger a save
-            this.saveData(); // Save the cleared data to the backend
+            this.isDirty = true;
+            this.saveData();
             this.syncUIToData();
             this.updateAllUI();
             this.showNotification('Tracker has been reset.', 'info');
@@ -241,10 +229,7 @@ class AstroTrackerApp {
     }
     
     private setDirty() { 
-        if (!this.isDirty) {
-            this.isDirty = true;
-            this.updateSaveButtonState();
-        }
+        if (!this.isDirty) { this.isDirty = true; this.updateSaveButtonState(); } 
     }
     
     private updateAllUI() { 
@@ -414,6 +399,14 @@ class AstroTrackerApp {
             notification.style.bottom = '-50px';
             setTimeout(() => document.body.removeChild(notification), 300);
         }, 3000);
+    }
+
+    // NEW: Type-safe error message helper
+    private getErrorMessage(error: unknown): string {
+        if (error instanceof Error) {
+            return error.message;
+        }
+        return String(error);
     }
 }
 
