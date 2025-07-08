@@ -8,7 +8,7 @@ module.exports = async (req, res) => {
 
   const BOT_TOKEN = process.env.BOT_TOKEN;
   if (!BOT_TOKEN) {
-    return res.status(500).json({ success: false, message: 'Server configuration error.' });
+    return res.status(500).json({ success: false, message: 'Server configuration error: BOT_TOKEN is not set.' });
   }
 
   try {
@@ -35,15 +35,11 @@ module.exports = async (req, res) => {
     });
 
     const tgResponseData = await tgResponse.json();
-
-    if (!tgResponse.ok) {
-      throw new Error(tgResponseData.description || 'Failed to send PDF to Telegram.');
-    }
-
-    return res.status(200).json({ success: true, message: 'PDF sent successfully.' });
-
+    if (!tgResponse.ok) throw new Error(tgResponseData.description || 'Failed to send PDF to Telegram.');
+    
+    return res.status(200).json({ success: true });
   } catch (error) {
-    console.error('Error in /api/send-pdf:', error);
-    return res.status(500).json({ message: error.message || 'An internal error occurred.' });
+    console.error('API Error:', error);
+    return res.status(500).json({ message: error.message || 'An internal server error occurred.' });
   }
 };

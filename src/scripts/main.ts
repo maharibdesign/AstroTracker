@@ -1,4 +1,4 @@
-// src/scripts/main.ts - Final Version with Correct Architecture
+// src/scripts/main.ts - Final Definitive Version
 
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -33,39 +33,23 @@ class AstroTrackerApp {
         this.initializeApp();
     }
     
-    private async initializeApp() {
-        this.showNotification('Loading...', 'info');
+    private initializeApp() {
         this.attachEventListeners();
-        await this.loadData();
+        this.loadData();
         this.updateAllUI();
         this.initTelegram();
     }
 
-    private async loadData() {
-        try {
-            if (window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
-                const userId = window.Telegram.WebApp.initDataUnsafe.user.id.toString();
-                const response = await fetch(`/api/get-data?userId=${userId}`);
-                if (response.ok) {
-                    this.trackerData = await response.json();
-                    this.showNotification('Progress loaded from cloud!', 'success');
-                    this.syncUIToData();
-                    return;
-                }
-            }
-            throw new Error('Using local data fallback.');
-        } catch (error) {
-            console.warn(this.getErrorMessage(error));
-            const savedData = localStorage.getItem('AstroTrackerData');
-            if (savedData) {
-                this.trackerData = JSON.parse(savedData);
-                this.showNotification('Loaded local progress.', 'info');
-            } else {
-                this.trackerData = Array.from({ length: this.TOTAL_DAYS }, (_, i) => this.createDefaultDay(i + 1));
-                this.showNotification('Welcome! Start your new journey.', 'info');
-            }
-            this.syncUIToData();
+    private loadData() {
+        const savedData = localStorage.getItem('AstroTrackerData');
+        if (savedData) {
+            this.trackerData = JSON.parse(savedData);
+            this.showNotification('Loaded local progress.', 'info');
+        } else {
+            this.trackerData = Array.from({ length: this.TOTAL_DAYS }, (_, i) => this.createDefaultDay(i + 1));
+            this.showNotification('Welcome! Start your new journey.', 'info');
         }
+        this.syncUIToData();
     }
     
     private syncUIToData() {
@@ -141,37 +125,15 @@ class AstroTrackerApp {
         };
     }
 
-    private async saveData() {
-        if (this.isSaving || !this.isDirty) {
-            if(!this.isDirty) this.showNotification('No unsaved changes.', 'info');
+    private saveData() {
+        if (!this.isDirty) {
+            this.showNotification('No unsaved changes.', 'info');
             return;
         }
-
-        this.isSaving = true;
-        const saveBtn = document.getElementById('fixedSaveBtn') as HTMLButtonElement;
-        if(saveBtn) saveBtn.disabled = true;
-
         localStorage.setItem('AstroTrackerData', JSON.stringify(this.trackerData));
         this.isDirty = false;
         this.updateSaveButtonState();
-        this.showNotification('Progress saved locally!', 'success');
-
-        try {
-            if (!window.Telegram?.WebApp?.initDataUnsafe?.user?.id) return; 
-            const userId = window.Telegram.WebApp.initDataUnsafe.user.id.toString();
-            
-            await fetch('/api/save-data', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId, trackerData: this.trackerData }),
-            });
-        } catch (error) {
-            console.error("Cloud sync error:", this.getErrorMessage(error));
-            this.showNotification('Cloud sync failed. Data is safe locally.', 'error');
-        } finally {
-            this.isSaving = false;
-            if(saveBtn) saveBtn.disabled = false;
-        }
+        this.showNotification('Progress saved!', 'success');
     }
     
     private async exportToPDF() {
@@ -183,7 +145,6 @@ class AstroTrackerApp {
         if(exportBtn) exportBtn.disabled = true;
 
         try {
-            // --- Step 1: Generate PDF in the browser ---
             const doc = new jsPDF();
             doc.setFontSize(18);
             doc.text("AstroTracker: 30-Day Transformation Report", 14, 22);
@@ -197,11 +158,8 @@ class AstroTrackerApp {
                 body: tableData, theme: 'grid', headStyles: { fillColor: [44, 62, 80] }
             });
 
-            // --- Step 2: Decide delivery method ---
             if (window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
-                // --- TELEGRAM LOGIC ---
                 const userId = window.Telegram.WebApp.initDataUnsafe.user.id.toString();
-                // Get PDF as a Base64 string, removing the 'data:application/pdf;base64,' prefix
                 const pdfBase64 = doc.output('datauristring').split(',')[1];
                 
                 this.showNotification('Sending to your chat...', 'info');
@@ -219,7 +177,6 @@ class AstroTrackerApp {
                 this.showNotification('Report sent to your chat!', 'success');
                 window.Telegram.WebApp.close();
             } else {
-                // --- BROWSER FALLBACK LOGIC ---
                 this.showNotification('Downloading PDF directly.', 'success');
                 doc.save('AstroTracker-Report.pdf');
             }
@@ -234,13 +191,12 @@ class AstroTrackerApp {
     }
     
     private resetData() {
-        if (confirm('Are you sure you want to reset all data? This will clear local and cloud progress.')) {
+        if (confirm('Are you sure you want to reset all data?')) {
             this.trackerData = Array.from({ length: this.TOTAL_DAYS }, (_, i) => this.createDefaultDay(i + 1));
             this.isDirty = true;
             this.saveData();
             this.syncUIToData();
             this.updateAllUI();
-            this.showNotification('Tracker has been reset.', 'info');
         }
     }
     
