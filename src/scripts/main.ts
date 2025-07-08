@@ -1,6 +1,6 @@
-// src/scripts/main.ts
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+// src/scripts/main.ts - Final Version with Supabase Backend Integration
+
+// Note: No need to import jspdf here, as generation is now fully on the backend.
 
 // --- TYPE DEFINITIONS ---
 type Theme = 'light' | 'dark';
@@ -22,17 +22,89 @@ export interface DayData {
 class AstroTrackerApp {
     private trackerData: DayData[] = [];
     private isDirty = false;
+    private isSaving = false;
     private isExporting = false;
     private readonly TOTAL_DAYS = 30;
     private readonly WATER_GOAL = 2.5;
     private readonly SLEEP_GOAL = 8;
 
     constructor() {
-        this.loadData();
-        this.attachEventListeners();
-        this.updateAllUI();
+        this.initializeApp();
+    }
+
+    private async initializeApp() {
+        this.showNotification('Loading...', 'info');
+        this.attachEventListeners(); // Attach listeners immediately to a responsive UI
+        await this.loadData();      // Asynchronously load data from cloud or local
+        this.updateAllUI();         // Update the entire UI with the final data
         this.initTelegram();
-        console.log("AstroTracker App Initialized");
+    }
+    
+    private async loadData() {
+        try {
+            if (window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
+                const userId = window.Telegram.WebApp.initDataUnsafe.user.id.toString();
+                const response = await fetch(`/api/get-data?userId=${userId}`);
+                if (response.ok) {
+                    this.trackerData = await response.json();
+                    this.showNotification('Progress loaded from cloud!', 'success');
+                    this.syncUIToData(); // Sync DOM with loaded data
+                    return;
+                }
+            }
+            // If not in Telegram, or if fetch fails (e.g., new user), proceed to fallback.
+            throw new Error('Using local data.');
+        } catch (error) {
+            console.warn("Could not load from cloud, using local fallback.", error);
+            const savedData = localStorage.getItem('AstroTrackerData');
+            if (savedData) {
+                this.trackerData = JSON.parse(savedData);
+                this.showNotification('Loaded local progress.', 'info');
+            } else {
+                this.trackerData = Array.from({ length: this.TOTAL_DAYS }, (_, i) => this.createDefaultDay(i + 1));
+                this.showNotification('Welcome! Start your new journey.', 'info');
+            }
+            this.syncUIToData(); // Sync DOM with local/default data
+        }
+    }
+    
+    // This function ensures the UI elements reflect the current `trackerData` state.
+    private syncUIToData() {
+        this.trackerData.forEach(dayData => {
+            const dayCard = document.querySelector(`.day-card[data-day="${dayData.day}"]`);
+            if (!dayCard) return;
+
+            // Update simple input values
+            (dayCard.querySelector('[data-input="date"]') as HTMLInputElement).value = dayData.date;
+            (dayCard.querySelector('[data-input="fitness.pushups"]') as HTMLInputElement).value = dayData.fitness.pushups.toString();
+            (dayCard.querySelector('[data-input="wellness.sleep"]') as HTMLInputElement).value = dayData.wellness.sleep.toString();
+            (dayCard.querySelector('[data-input="hydration.intake"]') as HTMLInputElement).value = dayData.hydration.intake.toString();
+            
+            const waterText = dayCard.querySelector('.water-text');
+            if(waterText) waterText.textContent = `${dayData.hydration.intake.toFixed(1)}/2.5L`;
+
+            // Update checkboxes
+            dayCard.querySelectorAll('.checkbox-container[data-input]').forEach(el => {
+                const inputPath = (el as HTMLElement).dataset.input!;
+                const [category, key] = inputPath.split('.') as [DayDataCategory, string];
+                const value = (dayData[category] as any)[key];
+                el.querySelector('.custom-checkbox')?.classList.toggle('checked', !!value);
+            });
+            
+            // Update tag selectors
+            dayCard.querySelectorAll('.tag-option[data-input]').forEach(el => {
+                 const inputPath = (el as HTMLElement).dataset.input!;
+                 const [category, key] = inputPath.split('.') as [DayDataCategory, string];
+                 const value = (dayData[category] as any)[key];
+                 el.classList.toggle('selected', !!value);
+            });
+
+            // Update emoji selectors
+            dayCard.querySelectorAll('.emoji-option[data-value]').forEach(el => {
+                 const value = (el as HTMLElement).dataset.value;
+                 el.classList.toggle('selected', value === dayData.wellness.energy);
+            });
+        });
     }
 
     private initTelegram() {
@@ -41,43 +113,30 @@ class AstroTrackerApp {
                 const tg = window.Telegram.WebApp;
                 tg.ready();
                 tg.onEvent('themeChanged', () => this.handleThemeChangeFromTelegram());
-            } catch (e) {
-                console.error("Error initializing Telegram App:", e);
-            }
-        } else {
-            console.log("Telegram Web App not found, running in standalone mode.");
+            } catch (e) { console.error("Error initializing Telegram App:", e); }
         }
     }
     
-    // --- THEME MANAGEMENT ---
     private applyTheme(theme: Theme) {
         document.documentElement.classList.remove('light', 'dark');
         document.documentElement.classList.add(theme);
     }
-
     private toggleTheme() {
         const currentTheme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
         const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
         this.applyTheme(newTheme);
         localStorage.setItem('AstroTrackerTheme', newTheme);
     }
-    
     private handleThemeChangeFromTelegram() {
         if (window.Telegram) {
-            try {
-                this.applyTheme(window.Telegram.WebApp.colorScheme);
-            } catch(e) { /* Failsafe */ }
+            try { this.applyTheme(window.Telegram.WebApp.colorScheme); } catch(e) {}
         }
     }
 
-
-    // --- DATA MANAGEMENT ---
     private createDefaultDay(day: number): DayData {
-        const date = new Date();
-        date.setDate(date.getDate() + day - 1);
+        const date = new Date(); date.setDate(date.getDate() + day - 1);
         return {
-            day: day,
-            date: date.toISOString().split('T')[0],
+            day, date: date.toISOString().split('T')[0],
             fitness: { workout: false, pushups: 0, creatine: false },
             nutrition: { breakfast: false, lunch: false, dinner: false, snack: false },
             hydration: { intake: 0 },
@@ -87,71 +146,128 @@ class AstroTrackerApp {
         };
     }
 
-    private loadData() {
-        const savedData = localStorage.getItem('AstroTrackerData');
-        if (savedData) {
-            this.trackerData = JSON.parse(savedData);
-        } else {
-            this.trackerData = Array.from({ length: this.TOTAL_DAYS }, (_, i) => this.createDefaultDay(i + 1));
-        }
-    }
-
-    private saveData() {
+    private async saveData() {
+        if (this.isSaving) return;
         if (!this.isDirty) {
             this.showNotification('No changes to save.', 'info');
             return;
         }
-        localStorage.setItem('AstroTrackerData', JSON.stringify(this.trackerData));
-        this.isDirty = false;
-        this.updateSaveButtonState();
-        this.showNotification('Progress saved successfully!', 'success');
-    }
 
-    private resetData() {
-        if (confirm('Are you sure you want to reset all data? This cannot be undone.')) {
-            localStorage.removeItem('AstroTrackerData');
-            localStorage.removeItem('AstroTrackerTheme');
-            window.location.reload();
+        this.isSaving = true;
+        this.showNotification('Saving...', 'info');
+        (document.getElementById('fixedSaveBtn') as HTMLButtonElement).disabled = true;
+
+        // Always save a local copy for speed and offline access
+        localStorage.setItem('AstroTrackerData', JSON.stringify(this.trackerData));
+        
+        try {
+            if (!window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
+                throw new Error("Local save only."); // This error message is caught and handled below
+            }
+            const userId = window.Telegram.WebApp.initDataUnsafe.user.id.toString();
+            
+            const response = await fetch('/api/save-data', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId, trackerData: this.trackerData }),
+            });
+            if (!response.ok) {
+                throw new Error('Failed to save data to cloud.');
+            }
+            
+            this.isDirty = false;
+            this.updateSaveButtonState();
+            this.showNotification('Progress saved!', 'success');
+        } catch (error) {
+            console.error("Save process finished with an issue:", error);
+            this.showNotification(error.message === 'Local save only.' ? 'Progress saved locally.' : 'Could not sync to cloud.', error.message === 'Local save only.' ? 'info' : 'error');
+        } finally {
+            this.isSaving = false;
+            (document.getElementById('fixedSaveBtn') as HTMLButtonElement).disabled = false;
         }
     }
+    
+    private async exportToPDF() {
+        if (this.isExporting) return;
+        this.isExporting = true;
+        this.showNotification('Requesting report...', 'info');
 
-    private setDirty() {
+        const exportBtn = document.getElementById('exportBtn') as HTMLButtonElement;
+        if(exportBtn) exportBtn.disabled = true;
+
+        try {
+            if (this.isDirty) {
+                this.showNotification('Please save changes before exporting.', 'info');
+                throw new Error("Unsaved changes.");
+            }
+            if (!window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
+                throw new Error("Please use the app in Telegram to export.");
+            }
+            
+            const userId = window.Telegram.WebApp.initDataUnsafe.user.id.toString();
+            const response = await fetch('/api/export-pdf', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId }),
+            });
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to generate report.');
+            }
+            this.showNotification('Report is being sent to your chat!', 'success');
+            window.Telegram.WebApp.close();
+        } catch (error) {
+            console.error("Export failed:", error);
+            // Don't show generic error for user-facing issues like "Unsaved changes."
+            if (error.message !== 'Unsaved changes.') {
+                 this.showNotification(error.message, 'error');
+            }
+        } finally {
+            this.isExporting = false;
+            if(exportBtn) exportBtn.disabled = false;
+        }
+    }
+    
+    private resetData() {
+        if (confirm('Are you sure you want to reset all data? This will clear cloud and local data.')) {
+            this.trackerData = Array.from({ length: this.TOTAL_DAYS }, (_, i) => this.createDefaultDay(i + 1));
+            localStorage.removeItem('AstroTrackerData');
+            this.isDirty = true; // Mark as dirty to trigger a save
+            this.saveData(); // Save the cleared data to the backend
+            this.syncUIToData();
+            this.updateAllUI();
+            this.showNotification('Tracker has been reset.', 'info');
+        }
+    }
+    
+    private setDirty() { 
         if (!this.isDirty) {
             this.isDirty = true;
             this.updateSaveButtonState();
         }
     }
     
-    // --- UI UPDATES ---
-    private updateAllUI() {
-        this.updateProgressCalendar();
-        this.calculateProgress();
+    private updateAllUI() { 
+        this.updateProgressCalendar(); 
+        this.calculateProgress(); 
         this.updateSaveButtonState();
     }
-
-    private updateSaveButtonState() {
-        const saveBtn = document.getElementById('fixedSaveBtn');
-        if (saveBtn) {
-            saveBtn.classList.toggle('dirty', this.isDirty);
-        }
+    
+    private updateSaveButtonState() { 
+        const btn = document.getElementById('fixedSaveBtn'); 
+        if (btn) btn.classList.toggle('dirty', this.isDirty); 
     }
 
-    private setDirtyAndUpdate() {
-        this.setDirty();
-        this.updateProgressCalendar();
-        this.calculateProgress();
+    private setDirtyAndUpdate() { 
+        this.setDirty(); 
+        this.updateProgressCalendar(); 
+        this.calculateProgress(); 
     }
 
-    private updateProgressCalendar() {
-        this.trackerData.forEach(dayData => {
-            const dayElement = document.querySelector(`[data-calendar-day="${dayData.day}"]`);
-            if (dayElement) {
-                dayElement.classList.toggle('completed', dayData.fitness.workout);
-            }
-        });
+    private updateProgressCalendar() { 
+        this.trackerData.forEach(d => document.querySelector(`[data-calendar-day="${d.day}"]`)?.classList.toggle('completed', d.fitness.workout)); 
     }
-
-    // --- EVENT LISTENERS ---
+    
     private attachEventListeners() {
         document.getElementById('fixedSaveBtn')?.addEventListener('click', () => this.saveData());
         document.getElementById('exportBtn')?.addEventListener('click', () => this.exportToPDF());
@@ -232,8 +348,7 @@ class AstroTrackerApp {
             this.setDirtyAndUpdate();
         });
     }
-    
-    // --- PROGRESS CALCULATION ---
+
     private calculateProgress() {
         const workoutDays = this.trackerData.filter(d => d.fitness.workout).length;
         const workoutPercent = Math.round((workoutDays / this.TOTAL_DAYS) * 100);
@@ -267,68 +382,7 @@ class AstroTrackerApp {
         document.getElementById(`${metric}Progress`)!.textContent = value;
         (document.getElementById(`${metric}Bar`) as HTMLElement)!.style.width = `${Math.min(barPercent, 100)}%`;
     }
-
-    // --- PDF EXPORT (FINAL VERSION) ---
-    private async exportToPDF() {
-        if (this.isExporting) return;
-        this.isExporting = true;
-        this.showNotification('Generating PDF report...', 'info');
-
-        const exportBtn = document.getElementById('exportBtn') as HTMLButtonElement;
-        if(exportBtn) exportBtn.disabled = true;
-
-        const doc = new jsPDF();
-        doc.setFontSize(18);
-        doc.text("AstroTracker: 30-Day Transformation Report", 14, 22);
-        doc.setFontSize(11);
-        doc.setTextColor(100);
-        doc.text(`Report generated on: ${new Date().toLocaleDateString()}`, 14, 29);
-        const tableData = this.trackerData.map(day => [
-            day.day, day.date, day.fitness.workout ? '✅' : '—', day.fitness.pushups,
-            day.hydration.intake.toFixed(1), day.wellness.sleep.toFixed(1),
-            Object.values(day.digestiveHealth).filter(Boolean).length ? 'Yes' : 'No'
-        ]);
-        autoTable(doc, {
-            startY: 35, head: [['Day', 'Date', 'Workout', 'Push-ups', 'Water (L)', 'Sleep (h)', 'Symptoms']],
-            body: tableData, theme: 'grid', headStyles: { fillColor: [44, 62, 80] }
-        });
-
-        try {
-            if (window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
-                // --- TELEGRAM MINI APP LOGIC ---
-                const userId = window.Telegram.WebApp.initDataUnsafe.user.id.toString();
-                const pdfBase64 = doc.output('datauristring').split(',')[1];
-                
-                // Note the API path is now just /api/send-pdf
-                const response = await fetch('/api/send-pdf', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pdfBase64, userId }),
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.message || `Server responded with status: ${response.status}`);
-                }
-                
-                this.showNotification('Report sent to your chat!', 'success');
-                window.Telegram.WebApp.close();
-
-            } else {
-                throw new Error("Not in Telegram or user info not available.");
-            }
-        } catch (error) {
-            // --- STANDARD BROWSER FALLBACK LOGIC ---
-            console.error("Export failed, falling back to browser download:", error);
-            this.showNotification('Could not send to chat. Downloading directly.', 'info');
-            doc.save('AstroTracker-Report.pdf');
-        } finally {
-            this.isExporting = false;
-            if(exportBtn) exportBtn.disabled = false;
-        }
-    }
-
-    // --- UTILITIES ---
+    
     private showNotification(message: string, type: 'success' | 'error' | 'info') {
         const notification = document.createElement('div');
         notification.textContent = message;
@@ -363,9 +417,4 @@ class AstroTrackerApp {
     }
 }
 
-// Instantiate the app once the DOM is ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => new AstroTrackerApp());
-} else {
-    new AstroTrackerApp();
-}
+new AstroTrackerApp();
