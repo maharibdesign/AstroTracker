@@ -1,4 +1,7 @@
-// src/scripts/main.ts - Final Version with Corrected Save/Reset Logic
+// src/scripts/main.ts - Final Version with Correct Architecture
+
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // --- TYPE DEFINITIONS ---
 type Theme = 'light' | 'dark';
@@ -138,10 +141,9 @@ class AstroTrackerApp {
         };
     }
 
-    // --- RE-ARCHITECTED SAVE FUNCTION ---
     private async saveData() {
         if (this.isSaving || !this.isDirty) {
-            this.showNotification('No unsaved changes.', 'info');
+            if(!this.isDirty) this.showNotification('No unsaved changes.', 'info');
             return;
         }
 
@@ -149,100 +151,96 @@ class AstroTrackerApp {
         const saveBtn = document.getElementById('fixedSaveBtn') as HTMLButtonElement;
         if(saveBtn) saveBtn.disabled = true;
 
-        // --- Step 1: Instant Local Save & UI Feedback ---
         localStorage.setItem('AstroTrackerData', JSON.stringify(this.trackerData));
         this.isDirty = false;
         this.updateSaveButtonState();
         this.showNotification('Progress saved locally!', 'success');
 
-        // --- Step 2: Attempt Cloud Sync in the Background ---
         try {
-            if (!window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
-                // This is not an error, just an expected condition for web users
-                console.log("Not in Telegram. Skipping cloud sync.");
-                return; 
-            }
+            if (!window.Telegram?.WebApp?.initDataUnsafe?.user?.id) return; 
             const userId = window.Telegram.WebApp.initDataUnsafe.user.id.toString();
             
-            const response = await fetch('/api/save-data', {
+            await fetch('/api/save-data', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userId, trackerData: this.trackerData }),
             });
-            if (!response.ok) {
-                // If the cloud sync specifically fails, notify the user.
-                throw new Error('Cloud sync failed. Your data is safe locally.');
-            }
-            console.log('Data synced to cloud successfully.');
-            // Optionally, show a "synced" message, but the initial "saved" is enough.
         } catch (error) {
-            const errorMessage = this.getErrorMessage(error);
-            console.error("Cloud sync error:", errorMessage);
-            this.showNotification(errorMessage, 'error');
+            console.error("Cloud sync error:", this.getErrorMessage(error));
+            this.showNotification('Cloud sync failed. Data is safe locally.', 'error');
         } finally {
             this.isSaving = false;
             if(saveBtn) saveBtn.disabled = false;
         }
     }
     
-    // --- RE-ARCHITECTED RESET FUNCTION ---
-    private resetData() {
-        if (confirm('Are you sure you want to reset all data? This will clear local and cloud progress.')) {
-            // 1. Create the new empty state
-            this.trackerData = Array.from({ length: this.TOTAL_DAYS }, (_, i) => this.createDefaultDay(i + 1));
-            
-            // 2. Mark as dirty so the save operation will proceed
-            this.isDirty = true;
-            
-            // 3. Immediately save this new empty state everywhere
-            this.saveData();
-            
-            // 4. Update the UI to reflect the reset
-            this.syncUIToData();
-            this.updateAllUI();
-            
-            this.showNotification('Tracker has been reset.', 'info');
-        }
-    }
-    
     private async exportToPDF() {
         if (this.isExporting) return;
         this.isExporting = true;
-        this.showNotification('Requesting report...', 'info');
+        this.showNotification('Generating your report...', 'info');
 
         const exportBtn = document.getElementById('exportBtn') as HTMLButtonElement;
         if(exportBtn) exportBtn.disabled = true;
 
         try {
-            if (this.isDirty) {
-                this.showNotification('Please save your latest changes before exporting.', 'info');
-                throw new Error("Unsaved changes.");
-            }
-            if (!window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
-                throw new Error("Please use the app in Telegram to export via chat.");
-            }
-            
-            const userId = window.Telegram.WebApp.initDataUnsafe.user.id.toString();
-            const response = await fetch('/api/export-pdf', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId }),
+            // --- Step 1: Generate PDF in the browser ---
+            const doc = new jsPDF();
+            doc.setFontSize(18);
+            doc.text("AstroTracker: 30-Day Transformation Report", 14, 22);
+            const tableData = this.trackerData.map(day => [
+                day.day, day.date, day.fitness.workout ? '✅' : '—', day.fitness.pushups,
+                day.hydration.intake.toFixed(1), day.wellness.sleep.toFixed(1),
+                Object.values(day.digestiveHealth).filter(Boolean).length ? 'Yes' : 'No'
+            ]);
+            autoTable(doc, {
+                startY: 35, head: [['Day', 'Date', 'Workout', 'Push-ups', 'Water (L)', 'Sleep (h)', 'Symptoms']],
+                body: tableData, theme: 'grid', headStyles: { fillColor: [44, 62, 80] }
             });
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Failed to generate report.');
+
+            // --- Step 2: Decide delivery method ---
+            if (window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
+                // --- TELEGRAM LOGIC ---
+                const userId = window.Telegram.WebApp.initDataUnsafe.user.id.toString();
+                // Get PDF as a Base64 string, removing the 'data:application/pdf;base64,' prefix
+                const pdfBase64 = doc.output('datauristring').split(',')[1];
+                
+                this.showNotification('Sending to your chat...', 'info');
+                const response = await fetch('/api/send-pdf', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pdfBase64, userId }),
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || 'Failed to send to Telegram.');
+                }
+                
+                this.showNotification('Report sent to your chat!', 'success');
+                window.Telegram.WebApp.close();
+            } else {
+                // --- BROWSER FALLBACK LOGIC ---
+                this.showNotification('Downloading PDF directly.', 'success');
+                doc.save('AstroTracker-Report.pdf');
             }
-            this.showNotification('Report sent to your chat!', 'success');
-            window.Telegram.WebApp.close();
         } catch (error) {
             const errorMessage = this.getErrorMessage(error);
             console.error("Export failed:", errorMessage);
-            if (errorMessage !== 'Unsaved changes.') {
-                 this.showNotification(errorMessage, 'error');
-            }
+            this.showNotification(errorMessage, 'error');
         } finally {
             this.isExporting = false;
             if(exportBtn) exportBtn.disabled = false;
+        }
+    }
+    
+    private resetData() {
+        if (confirm('Are you sure you want to reset all data? This will clear local and cloud progress.')) {
+            this.trackerData = Array.from({ length: this.TOTAL_DAYS }, (_, i) => this.createDefaultDay(i + 1));
+            this.isDirty = true;
+            this.saveData();
+            this.syncUIToData();
+            this.updateAllUI();
+            this.showNotification('Tracker has been reset.', 'info');
         }
     }
     
@@ -349,6 +347,7 @@ class AstroTrackerApp {
     }
 
     private calculateProgress() {
+        if (!this.trackerData || this.trackerData.length === 0) return;
         const workoutDays = this.trackerData.filter(d => d.fitness.workout).length;
         const workoutPercent = Math.round((workoutDays / this.TOTAL_DAYS) * 100);
         this.updateProgressUI('workout', `${workoutPercent}%`, workoutPercent);
@@ -378,8 +377,10 @@ class AstroTrackerApp {
     }
     
     private updateProgressUI(metric: string, value: string, barPercent: number) {
-        document.getElementById(`${metric}Progress`)!.textContent = value;
-        (document.getElementById(`${metric}Bar`) as HTMLElement)!.style.width = `${Math.min(barPercent, 100)}%`;
+        const valueEl = document.getElementById(`${metric}Progress`);
+        const barEl = document.getElementById(`${metric}Bar`) as HTMLElement;
+        if(valueEl) valueEl.textContent = value;
+        if(barEl) barEl.style.width = `${Math.min(barPercent, 100)}%`;
     }
     
     private showNotification(message: string, type: 'success' | 'error' | 'info') {

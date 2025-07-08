@@ -1,17 +1,13 @@
-// Using 'require' syntax for Node.js compatibility in Vercel serverless functions
 const FormData = require('form-data');
-const fetch = require('node-fetch'); // Vercel provides fetch, but this is a robust way
+const fetch = require('node-fetch');
 
-// This is the function Vercel will run.
 module.exports = async (req, res) => {
-  // Ensure this function only responds to POST requests
   if (req.method !== 'POST') {
-    return res.status(405).json({ success: false, message: 'Method Not Allowed' });
+    return res.status(405).json({ message: 'Method Not Allowed' });
   }
 
   const BOT_TOKEN = process.env.BOT_TOKEN;
   if (!BOT_TOKEN) {
-    console.error("Environment Variable 'BOT_TOKEN' is not set.");
     return res.status(500).json({ success: false, message: 'Server configuration error.' });
   }
 
@@ -41,15 +37,13 @@ module.exports = async (req, res) => {
     const tgResponseData = await tgResponse.json();
 
     if (!tgResponse.ok) {
-      console.error('Telegram API Error:', tgResponseData);
-      return res.status(500).json({ success: false, message: tgResponseData.description || 'Failed to send PDF to Telegram.' });
+      throw new Error(tgResponseData.description || 'Failed to send PDF to Telegram.');
     }
 
-    // If everything is successful, send a 200 OK response
     return res.status(200).json({ success: true, message: 'PDF sent successfully.' });
 
   } catch (error) {
     console.error('Error in /api/send-pdf:', error);
-    return res.status(500).json({ success: false, message: 'An internal error occurred.' });
+    return res.status(500).json({ message: error.message || 'An internal error occurred.' });
   }
 };
