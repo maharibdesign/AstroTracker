@@ -3,50 +3,25 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 // --- TYPE DEFINITIONS ---
+type Theme = 'light' | 'dark';
 type EnergyLevel = 'high' | 'medium' | 'low' | null;
-
-// Define a type for categories that are objects, to help TypeScript with indexing.
 type DayDataCategory = 'fitness' | 'nutrition' | 'hydration' | 'selfCare' | 'wellness' | 'digestiveHealth';
 
 export interface DayData {
     day: number;
     date: string;
-    fitness: {
-        workout: boolean;
-        pushups: number;
-        creatine: boolean;
-    };
-    nutrition: {
-        breakfast: boolean;
-        lunch: boolean;
-        dinner: boolean;
-        snack: boolean;
-    };
-    hydration: {
-        intake: number;
-    };
-    selfCare: {
-        skinAM: boolean;
-        skinPM: boolean;
-        prayerAM: boolean;
-        prayerPM: boolean;
-    };
-    wellness: {
-        sleep: number;
-        es: boolean;
-        energy: EnergyLevel;
-    };
-    digestiveHealth: {
-        bloating: boolean;
-        constipation: boolean;
-        acidPain: boolean;
-    };
+    fitness: { workout: boolean; pushups: number; creatine: boolean; };
+    nutrition: { breakfast: boolean; lunch: boolean; dinner: boolean; snack: boolean; };
+    hydration: { intake: number; };
+    selfCare: { skinAM: boolean; skinPM: boolean; prayerAM: boolean; prayerPM: boolean; };
+    wellness: { sleep: number; es: boolean; energy: EnergyLevel; };
+    digestiveHealth: { bloating: boolean; constipation: boolean; acidPain: boolean; };
 }
 
 // --- MAIN APPLICATION CLASS ---
 class AstroTrackerApp {
     private trackerData: DayData[] = [];
-    private isDirty = false; // To track unsaved changes
+    private isDirty = false;
     private readonly TOTAL_DAYS = 30;
     private readonly WATER_GOAL = 2.5;
     private readonly SLEEP_GOAL = 8;
@@ -55,9 +30,44 @@ class AstroTrackerApp {
         this.loadData();
         this.attachEventListeners();
         this.updateAllUI();
+        this.initTelegram();
         console.log("AstroTracker App Initialized");
     }
 
+    private initTelegram() {
+        try {
+            const tg = window.Telegram.WebApp;
+            tg.ready();
+            // Listen for theme changes from Telegram in real-time
+            tg.onEvent('themeChanged', () => this.handleThemeChangeFromTelegram());
+        } catch (e) {
+            console.log("Telegram Web App not found, running in standalone mode.");
+        }
+    }
+    
+    // --- THEME MANAGEMENT ---
+    private applyTheme(theme: Theme) {
+        document.documentElement.classList.remove('light', 'dark');
+        document.documentElement.classList.add(theme);
+    }
+
+    private toggleTheme() {
+        const currentTheme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        this.applyTheme(newTheme);
+        localStorage.setItem('AstroTrackerTheme', newTheme);
+    }
+    
+    private handleThemeChangeFromTelegram() {
+        // When Telegram changes the theme, we update the UI but DON'T save to localStorage
+        // This allows the user's manual toggle to override the Telegram theme.
+        try {
+            this.applyTheme(window.Telegram.WebApp.colorScheme);
+        } catch(e) { /* Failsafe */ }
+    }
+
+
+    // --- DATA MANAGEMENT ---
     private createDefaultDay(day: number): DayData {
         const date = new Date();
         date.setDate(date.getDate() + day - 1);
@@ -83,6 +93,10 @@ class AstroTrackerApp {
     }
 
     private saveData() {
+        if (!this.isDirty) {
+            this.showNotification('No changes to save.', 'info');
+            return;
+        }
         localStorage.setItem('AstroTrackerData', JSON.stringify(this.trackerData));
         this.isDirty = false;
         this.updateSaveButtonState();
@@ -92,9 +106,8 @@ class AstroTrackerApp {
     private resetData() {
         if (confirm('Are you sure you want to reset all data? This cannot be undone.')) {
             localStorage.removeItem('AstroTrackerData');
-            this.trackerData = Array.from({ length: this.TOTAL_DAYS }, (_, i) => this.createDefaultDay(i + 1));
-            this.isDirty = true;
-            window.location.reload(); // Easiest way to re-render the whole page with default data
+            localStorage.removeItem('AstroTrackerTheme'); // Also reset theme preference
+            window.location.reload();
         }
     }
 
@@ -104,91 +117,86 @@ class AstroTrackerApp {
             this.updateSaveButtonState();
         }
     }
-
-    private updateSaveButtonState() {
-        const saveBtn = document.getElementById('saveBtn');
-        if (saveBtn) {
-            if (this.isDirty) {
-                saveBtn.classList.add('dirty');
-                saveBtn.querySelector('span')!.textContent = 'Unsaved Changes';
-            } else {
-                saveBtn.classList.remove('dirty');
-                saveBtn.querySelector('span')!.textContent = 'Save Progress';
-            }
-        }
-    }
-
+    
+    // --- UI UPDATES ---
     private updateAllUI() {
+        this.updateProgressCalendar();
         this.calculateProgress();
         this.updateSaveButtonState();
     }
 
+    private updateSaveButtonState() {
+        const saveBtn = document.getElementById('fixedSaveBtn');
+        if (saveBtn) {
+            saveBtn.classList.toggle('dirty', this.isDirty);
+        }
+    }
+
+    private setDirtyAndUpdate() {
+        this.setDirty();
+        this.updateProgressCalendar();
+        this.calculateProgress();
+    }
+
+    private updateProgressCalendar() {
+        this.trackerData.forEach(dayData => {
+            const dayElement = document.querySelector(`[data-calendar-day="${dayData.day}"]`);
+            if (dayElement) {
+                dayElement.classList.toggle('completed', dayData.fitness.workout);
+            }
+        });
+    }
+
+    // --- EVENT LISTENERS ---
     private attachEventListeners() {
-        // Control buttons
-        document.getElementById('saveBtn')?.addEventListener('click', () => this.saveData());
+        document.getElementById('fixedSaveBtn')?.addEventListener('click', () => this.saveData());
         document.getElementById('exportBtn')?.addEventListener('click', () => this.exportToPDF());
         document.getElementById('resetBtn')?.addEventListener('click', () => this.resetData());
+        document.getElementById('themeToggleBtn')?.addEventListener('click', () => this.toggleTheme());
         
-        // Event delegation for all day card inputs
         const trackerContainer = document.getElementById('trackerContainer');
         if (!trackerContainer) return;
 
         trackerContainer.addEventListener('click', (e) => {
             const target = e.target as HTMLElement;
-
-            // Card collapse/expand
             const header = target.closest('.day-header');
             if (header) {
                 header.closest('.day-card')?.classList.toggle('collapsed');
                 return;
             }
             
-            // FIX: Cast dayCard to HTMLElement to access dataset
             const dayCard = target.closest('.day-card') as HTMLElement;
             if (!dayCard) return;
 
             const day = parseInt(dayCard.dataset.day!, 10);
             const data = this.trackerData[day - 1];
-
-            // Checkbox containers
             const checkboxContainer = target.closest('.checkbox-container') as HTMLElement;
-            if (checkboxContainer && checkboxContainer.dataset.input) {
-                // FIX: Use defined types for safe object key access
-                const inputPath = checkboxContainer.dataset.input;
-                const [category, key] = inputPath.split('.') as [DayDataCategory, string];
+
+            if (checkboxContainer?.dataset.input) {
+                const [category, key] = checkboxContainer.dataset.input.split('.') as [DayDataCategory, string];
                 const dataCategoryObject = data[category];
                 (dataCategoryObject as any)[key] = !(dataCategoryObject as any)[key];
-                
                 checkboxContainer.querySelector('.custom-checkbox')?.classList.toggle('checked');
                 this.setDirtyAndUpdate();
                 return;
             }
 
-            // Tag options (Digestive Health)
             const tagOption = target.closest('.tag-option') as HTMLElement;
-            if (tagOption && tagOption.dataset.input) {
-                // FIX: Use defined types for safe object key access
-                const inputPath = tagOption.dataset.input;
-                const [category, key] = inputPath.split('.') as [DayDataCategory, string];
+            if (tagOption?.dataset.input) {
+                const [category, key] = tagOption.dataset.input.split('.') as [DayDataCategory, string];
                 const dataCategoryObject = data[category];
                 (dataCategoryObject as any)[key] = !(dataCategoryObject as any)[key];
-
                 tagOption.classList.toggle('selected');
                 this.setDirtyAndUpdate();
                 return;
             }
 
-            // Emoji options (Energy Level)
             const emojiOption = target.closest('.emoji-option') as HTMLElement;
             if (emojiOption) {
-                const group = emojiOption.parentElement!;
-                // FIX: Cast group to HTMLElement and use dataset
-                const inputPath = (group as HTMLElement).dataset.inputGroup!;
-                const [category, key] = inputPath.split('.') as [DayDataCategory, string];
+                const group = emojiOption.parentElement! as HTMLElement;
+                const [category, key] = group.dataset.inputGroup!.split('.') as [DayDataCategory, string];
                 const value = emojiOption.dataset.value as EnergyLevel;
-                
                 (data[category] as any)[key] = value;
-                
                 group.querySelectorAll('.emoji-option').forEach(el => el.classList.remove('selected'));
                 emojiOption.classList.add('selected');
                 this.setDirtyAndUpdate();
@@ -198,25 +206,20 @@ class AstroTrackerApp {
 
         trackerContainer.addEventListener('input', (e) => {
             const target = e.target as HTMLInputElement;
-            // FIX: Cast dayCard to HTMLElement to access dataset
             const dayCard = target.closest('.day-card') as HTMLElement;
             if (!dayCard) return;
 
             const day = parseInt(dayCard.dataset.day!, 10);
             const data = this.trackerData[day - 1];
-            // FIX: Use dataset which is available on all HTMLElements
             const inputPath = target.dataset.input!;
-            // FIX: Use defined types for safe object key access
             const [category, key] = inputPath.split('.') as [DayDataCategory, string];
 
             if (target.type === 'number' || target.type === 'range') {
                 (data[category] as any)[key] = parseFloat(target.value) || 0;
-            } else {
-                 // Handles date input
-                (data as any)[key] = target.value;
+            } else if (target.type === 'date') {
+                 data.date = target.value;
             }
 
-            // Special case for water slider text update
             if (inputPath === 'hydration.intake') {
                  const waterText = dayCard.querySelector('.water-text');
                  if(waterText) waterText.textContent = `${target.value}/2.5L`;
@@ -224,11 +227,6 @@ class AstroTrackerApp {
             
             this.setDirtyAndUpdate();
         });
-    }
-
-    private setDirtyAndUpdate() {
-        this.setDirty();
-        this.calculateProgress();
     }
     
     // --- PROGRESS CALCULATION ---
@@ -255,7 +253,7 @@ class AstroTrackerApp {
             if (day.selfCare.skinAM && day.selfCare.skinPM) score++;
             const meals = Object.values(day.nutrition).filter(Boolean).length;
             if (meals >= 3) score++;
-            return total + (score / 5); // Score out of 5 for the day
+            return total + (score / 5);
         }, 0);
         const wellnessPercent = Math.round((wellnessScore / this.TOTAL_DAYS) * 100);
         this.updateProgressUI('wellness', `${wellnessPercent}%`, wellnessPercent);
@@ -303,8 +301,6 @@ class AstroTrackerApp {
         document.body.appendChild(downloadLink);
         downloadLink.click();
         document.body.removeChild(downloadLink);
-
-        this.showNotification('PDF downloaded!', 'success');
     }
 
     // --- UTILITIES ---

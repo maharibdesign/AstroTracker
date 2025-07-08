@@ -13,6 +13,8 @@
   --header-gradient-start: #2c3e50;
   --header-gradient-end: #1a2530;
   --header-text: #ffffff;
+  --day-header-gradient-start: #34495e;
+  --day-header-gradient-end: #2c3e50;
   --border-color: #eaeaea;
   --input-border: #ddd;
   --shadow: rgba(0, 0, 0, 0.08);
@@ -38,6 +40,8 @@ html.dark {
   --header-gradient-start: #1a2530;
   --header-gradient-end: #0e1318;
   --header-text: #ecf0f1;
+  --day-header-gradient-start: #4a627a;
+  --day-header-gradient-end: #3e5165;
   --border-color: #3e5165;
   --input-border: #4a627a;
   --shadow: rgba(0, 0, 0, 0.2);
@@ -62,7 +66,7 @@ body {
   color: var(--text-primary);
   min-height: 100vh;
   padding: clamp(10px, 3vw, 20px);
-  padding-bottom: 100px; /* Add padding to prevent FAB from overlapping footer */
+  padding-bottom: 100px;
   line-height: 1.6;
 }
 
@@ -108,8 +112,6 @@ h1, h2, h3 {
 .btn-reset { background: var(--accent-tertiary); box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3); }
 .btn-reset:hover { box-shadow: 0 6px 20px rgba(231, 76, 60, 0.4); }
 
-
-/* NEW: Fixed Action Button for Saving */
 .fab-save-button {
     position: fixed;
     bottom: 20px;
@@ -169,7 +171,6 @@ header {
   text-align: center;
   padding: 30px 20px;
   margin-bottom: 30px;
-  background: var(--header-gradient-start);
   background-image: linear-gradient(135deg, var(--header-gradient-start) 0%, var(--header-gradient-end) 100%);
   color: var(--header-text);
   border-radius: 15px;
@@ -179,7 +180,6 @@ header {
     flex-grow: 1;
 }
 
-/* NEW: Theme Toggle Button */
 .theme-toggle {
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.2);
@@ -255,6 +255,7 @@ footer {
   border: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
+  overflow: hidden; /* Important for border-radius on header */
 }
 
 .day-card:hover {
@@ -262,19 +263,21 @@ footer {
   box-shadow: 0 12px 30px var(--shadow-hover);
 }
 
+/* FIX: New styles for Day Card Header */
 .day-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   cursor: pointer;
-  padding: 20px;
+  padding: 15px 20px;
+  background-image: linear-gradient(135deg, var(--day-header-gradient-start), var(--day-header-gradient-end));
+  color: var(--header-text); /* Use white text color */
 }
 
 .day-header h3 {
   font-size: clamp(1.3rem, 3vw, 1.5rem);
   font-weight: 700;
-  /* FIX: Ensure color uses theme variable for visibility */
-  color: var(--text-primary);
+  color: inherit; /* Inherit color from .day-header */
 }
 
 .day-header .toggle-icon {
@@ -286,17 +289,16 @@ footer {
 }
 
 .day-body {
-  padding: 0 20px 20px 20px;
+  padding: 20px;
   overflow: hidden;
-  max-height: 1000px; /* arbitrary high value */
+  max-height: 1000px;
   transition: max-height 0.5s cubic-bezier(0.25, 0.1, 0.25, 1),
               padding 0.5s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
 .day-card.collapsed .day-body {
   max-height: 0;
-  padding-top: 0;
-  padding-bottom: 0;
+  padding: 0 20px;
 }
 
 .date-input {
@@ -309,7 +311,7 @@ footer {
   width: 140px;
 }
 .date-input::-webkit-calendar-picker-indicator {
-    filter: invert(var(--is-dark, 0)); /* Invert icon in dark mode */
+    filter: invert(var(--is-dark, 0));
 }
 html.dark .date-input { --is-dark: 1; }
 
@@ -352,14 +354,6 @@ html.dark .date-input { --is-dark: 1; }
     margin-right: auto;
 }
 
-/* Custom Checkbox */
-.checkbox-container {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  user-select: none;
-}
 .custom-checkbox {
   width: 20px;
   height: 20px;
@@ -382,7 +376,6 @@ html.dark .date-input { --is-dark: 1; }
   font-weight: bold;
 }
 
-/* Other Inputs */
 .number-input {
   width: 60px;
   padding: 6px;
@@ -393,7 +386,6 @@ html.dark .date-input { --is-dark: 1; }
   text-align: center;
   font-size: clamp(0.85rem, 2vw, 0.95rem);
 }
-/* Hide number input spinners */
 .number-input::-webkit-outer-spin-button,
 .number-input::-webkit-inner-spin-button {
   -webkit-appearance: none;
@@ -404,7 +396,6 @@ html.dark .date-input { --is-dark: 1; }
   -moz-appearance: textfield;
 }
 
-/* Water Slider */
 .water-tracker {
     display: flex;
     align-items: center;
@@ -422,7 +413,6 @@ html.dark .date-input { --is-dark: 1; }
     color: var(--accent-primary);
 }
 
-/* Emoji/Energy Selector */
 .emoji-selector {
   display: flex;
   gap: 5px;
@@ -445,7 +435,6 @@ html.dark .date-input { --is-dark: 1; }
   border-color: var(--accent-primary);
 }
 
-/* Tag/Symptom Selector */
 .tag-selector {
   display: flex;
   gap: 8px;
@@ -469,7 +458,7 @@ html.dark .date-input { --is-dark: 1; }
 
 
 /* -------------------------- */
-/*  6. PROGRESS CALENDAR (NEW) */
+/*  6. PROGRESS CALENDAR      */
 /* -------------------------- */
 .progress-calendar {
     background: var(--card-bg);
@@ -528,7 +517,7 @@ html.dark .date-input { --is-dark: 1; }
 
 
 /* ----------------------- */
-/*  7. PROGRESS SUMMARY (MOVED) */
+/*  7. PROGRESS SUMMARY   */
 /* ----------------------- */
 .progress-section {
   background: var(--card-bg);
