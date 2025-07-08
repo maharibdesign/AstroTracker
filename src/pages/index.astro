@@ -5,15 +5,15 @@ import Controls from '../components/Controls.astro';
 import ProgressSummary from '../components/ProgressSummary.astro';
 import DayCard from '../components/DayCard.astro';
 import Footer from '../components/Footer.astro';
+import ProgressCalendar from '../components/ProgressCalendar.astro'; // Import the new component
 import type { DayData } from '../scripts/main';
 
 // This function runs on the server (or at build time) to create initial state.
-// In a real app, this could fetch from a database. Here, we create defaults.
 function getInitialData(): DayData[] {
     const TOTAL_DAYS = 30;
     const createDefaultDay = (day: number): DayData => {
         const date = new Date();
-        date.setDate(date.getDate() + day - 1); // Set date for each day
+        date.setDate(date.getDate() + day - 1);
         return {
             day: day,
             date: date.toISOString().split('T')[0],
@@ -35,14 +35,27 @@ const initialTrackerData = getInitialData();
     <Header />
     <main>
         <Controls />
-        <ProgressSummary />
+        
+        <!-- NEW: Progress Calendar is now at the top -->
+        <ProgressCalendar />
+
         <div class="tracker-container" id="trackerContainer">
             {initialTrackerData.map((dayData, index) => (
                 <DayCard dayData={dayData} isCollapsed={index > 2} />
             ))}
         </div>
+
+        <!-- MOVED: Progress Summary is now at the bottom -->
+        <ProgressSummary />
     </main>
     <Footer />
+
+    <!-- NEW: Fixed "Save" button -->
+    <button class="fab-save-button" id="fixedSaveBtn">
+        <i class="fas fa-save"></i>
+        <span>Save</span>
+    </button>
+
 </MainLayout>
 
 <script src="../scripts/main.ts"></script>

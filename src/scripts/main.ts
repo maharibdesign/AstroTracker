@@ -5,6 +5,9 @@ import autoTable from 'jspdf-autotable';
 // --- TYPE DEFINITIONS ---
 type EnergyLevel = 'high' | 'medium' | 'low' | null;
 
+// Define a type for categories that are objects, to help TypeScript with indexing.
+type DayDataCategory = 'fitness' | 'nutrition' | 'hydration' | 'selfCare' | 'wellness' | 'digestiveHealth';
+
 export interface DayData {
     day: number;
     date: string;
@@ -139,20 +142,22 @@ class AstroTrackerApp {
                 header.closest('.day-card')?.classList.toggle('collapsed');
                 return;
             }
-
-            const dayCard = target.closest('.day-card');
+            
+            // FIX: Cast dayCard to HTMLElement to access dataset
+            const dayCard = target.closest('.day-card') as HTMLElement;
             if (!dayCard) return;
 
             const day = parseInt(dayCard.dataset.day!, 10);
             const data = this.trackerData[day - 1];
 
             // Checkbox containers
-            const checkboxContainer = target.closest('.checkbox-container');
-            if (checkboxContainer) {
-                const inputPath = checkboxContainer.getAttribute('data-input')!;
-                const [category, key] = inputPath.split('.');
-                const currentValue = (data[category] as any)[key];
-                (data[category] as any)[key] = !currentValue;
+            const checkboxContainer = target.closest('.checkbox-container') as HTMLElement;
+            if (checkboxContainer && checkboxContainer.dataset.input) {
+                // FIX: Use defined types for safe object key access
+                const inputPath = checkboxContainer.dataset.input;
+                const [category, key] = inputPath.split('.') as [DayDataCategory, string];
+                const dataCategoryObject = data[category];
+                (dataCategoryObject as any)[key] = !(dataCategoryObject as any)[key];
                 
                 checkboxContainer.querySelector('.custom-checkbox')?.classList.toggle('checked');
                 this.setDirtyAndUpdate();
@@ -160,24 +165,27 @@ class AstroTrackerApp {
             }
 
             // Tag options (Digestive Health)
-            const tagOption = target.closest('.tag-option');
-            if (tagOption) {
-                const inputPath = tagOption.getAttribute('data-input')!;
-                const [category, key] = inputPath.split('.');
-                const currentValue = (data[category] as any)[key];
-                (data[category] as any)[key] = !currentValue;
+            const tagOption = target.closest('.tag-option') as HTMLElement;
+            if (tagOption && tagOption.dataset.input) {
+                // FIX: Use defined types for safe object key access
+                const inputPath = tagOption.dataset.input;
+                const [category, key] = inputPath.split('.') as [DayDataCategory, string];
+                const dataCategoryObject = data[category];
+                (dataCategoryObject as any)[key] = !(dataCategoryObject as any)[key];
+
                 tagOption.classList.toggle('selected');
                 this.setDirtyAndUpdate();
                 return;
             }
 
             // Emoji options (Energy Level)
-            const emojiOption = target.closest('.emoji-option');
+            const emojiOption = target.closest('.emoji-option') as HTMLElement;
             if (emojiOption) {
                 const group = emojiOption.parentElement!;
-                const inputPath = group.getAttribute('data-input-group')!;
-                const [category, key] = inputPath.split('.');
-                const value = emojiOption.getAttribute('data-value') as EnergyLevel;
+                // FIX: Cast group to HTMLElement and use dataset
+                const inputPath = (group as HTMLElement).dataset.inputGroup!;
+                const [category, key] = inputPath.split('.') as [DayDataCategory, string];
+                const value = emojiOption.dataset.value as EnergyLevel;
                 
                 (data[category] as any)[key] = value;
                 
@@ -190,23 +198,28 @@ class AstroTrackerApp {
 
         trackerContainer.addEventListener('input', (e) => {
             const target = e.target as HTMLInputElement;
-            const dayCard = target.closest('.day-card');
+            // FIX: Cast dayCard to HTMLElement to access dataset
+            const dayCard = target.closest('.day-card') as HTMLElement;
             if (!dayCard) return;
 
             const day = parseInt(dayCard.dataset.day!, 10);
             const data = this.trackerData[day - 1];
-            const inputPath = target.getAttribute('data-input')!;
-            const [category, key] = inputPath.split('.');
+            // FIX: Use dataset which is available on all HTMLElements
+            const inputPath = target.dataset.input!;
+            // FIX: Use defined types for safe object key access
+            const [category, key] = inputPath.split('.') as [DayDataCategory, string];
 
-            if (target.type === 'number') {
+            if (target.type === 'number' || target.type === 'range') {
                 (data[category] as any)[key] = parseFloat(target.value) || 0;
-            } else if (target.type === 'range') {
-                 (data[category] as any)[key] = parseFloat(target.value);
-                 // update text label for water slider
+            } else {
+                 // Handles date input
+                (data as any)[key] = target.value;
+            }
+
+            // Special case for water slider text update
+            if (inputPath === 'hydration.intake') {
                  const waterText = dayCard.querySelector('.water-text');
                  if(waterText) waterText.textContent = `${target.value}/2.5L`;
-            } else {
-                (data[category] as any)[key] = target.value;
             }
             
             this.setDirtyAndUpdate();
@@ -250,7 +263,7 @@ class AstroTrackerApp {
     
     private updateProgressUI(metric: string, value: string, barPercent: number) {
         document.getElementById(`${metric}Progress`)!.textContent = value;
-        (document.getElementById(`${metric}Bar`) as HTMLElement)!.style.width = `${barPercent}%`;
+        (document.getElementById(`${metric}Bar`) as HTMLElement)!.style.width = `${Math.min(barPercent, 100)}%`;
     }
 
     // --- PDF EXPORT ---
@@ -282,11 +295,8 @@ class AstroTrackerApp {
             headStyles: { fillColor: [44, 62, 80] }
         });
         
-        // The save method now returns a data URI when a filename is provided,
-        // which is perfect for forcing downloads on mobile.
-        const pdfDataUri = doc.output('dataurlstring', { filename: 'AstroTracker-Report.pdf' });
+        const pdfDataUri = doc.output('dataurlstring');
         
-        // Create a temporary link to trigger the download
         const downloadLink = document.createElement('a');
         downloadLink.href = pdfDataUri;
         downloadLink.download = 'AstroTracker-Report.pdf';
@@ -303,7 +313,7 @@ class AstroTrackerApp {
         notification.textContent = message;
         notification.style.cssText = `
             position: fixed;
-            bottom: 20px;
+            bottom: -50px;
             left: 50%;
             transform: translateX(-50%);
             color: white;
@@ -326,7 +336,7 @@ class AstroTrackerApp {
         }, 10);
         setTimeout(() => {
             notification.style.opacity = '0';
-            notification.style.bottom = '20px';
+            notification.style.bottom = '-50px';
             setTimeout(() => document.body.removeChild(notification), 300);
         }, 3000);
     }

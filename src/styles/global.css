@@ -19,6 +19,8 @@
   --shadow-hover: rgba(0, 0, 0, 0.12);
   --shadow-btn: rgba(52, 152, 219, 0.3);
   --shadow-btn-hover: rgba(52, 152, 219, 0.4);
+  --accent-primary-faded: #eaf5fc;
+  --accent-secondary-faded: #eafaf1;
 
   --accent-primary: #3498db; /* Blue */
   --accent-secondary: #2ecc71; /* Green */
@@ -40,6 +42,8 @@ html.dark {
   --input-border: #4a627a;
   --shadow: rgba(0, 0, 0, 0.2);
   --shadow-hover: rgba(0, 0, 0, 0.3);
+  --accent-primary-faded: #2c3e50;
+  --accent-secondary-faded: #254a35;
 }
 
 
@@ -58,6 +62,7 @@ body {
   color: var(--text-primary);
   min-height: 100vh;
   padding: clamp(10px, 3vw, 20px);
+  padding-bottom: 100px; /* Add padding to prevent FAB from overlapping footer */
   line-height: 1.6;
 }
 
@@ -86,7 +91,6 @@ h1, h2, h3 {
   display: flex;
   align-items: center;
   gap: 10px;
-  box-shadow: 0 4px 15px var(--shadow-btn);
   flex-shrink: 0;
   justify-content: center;
 }
@@ -97,29 +101,61 @@ h1, h2, h3 {
 
 .btn:hover {
   transform: translateY(-3px);
-  box-shadow: 0 6px 20px var(--shadow-btn-hover);
 }
 
-.btn-save { background: var(--accent-primary); box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3); }
-.btn-save:hover { box-shadow: 0 6px 20px rgba(52, 152, 219, 0.4); }
 .btn-export { background: var(--accent-secondary); box-shadow: 0 4px 15px rgba(46, 204, 113, 0.3); }
 .btn-export:hover { box-shadow: 0 6px 20px rgba(46, 204, 113, 0.4); }
 .btn-reset { background: var(--accent-tertiary); box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3); }
 .btn-reset:hover { box-shadow: 0 6px 20px rgba(231, 76, 60, 0.4); }
 
-.btn-save.dirty::after {
-    content: '•';
-    color: var(--accent-warning);
-    font-size: 2.5rem;
-    line-height: 1;
-    margin-left: 4px;
+
+/* NEW: Fixed Action Button for Saving */
+.fab-save-button {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 60px;
+    height: 60px;
+    background-color: var(--accent-primary);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    box-shadow: 0 6px 20px rgba(52, 152, 219, 0.4);
+    cursor: pointer;
+    z-index: 1000;
+    transition: all 0.3s ease;
+}
+.fab-save-button:hover {
+    transform: scale(1.1);
+    box-shadow: 0 8px 25px rgba(52, 152, 219, 0.5);
+}
+.fab-save-button span {
+    display: none;
+}
+.fab-save-button.dirty {
+    background-color: var(--accent-warning);
+}
+.fab-save-button.dirty::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background-color: var(--accent-warning);
     animation: pulse 1.5s infinite;
+    z-index: -1;
 }
 
 @keyframes pulse {
-    0% { opacity: 0.5; }
-    50% { opacity: 1; }
-    100% { opacity: 0.5; }
+    0% { transform: scale(1); opacity: 0.7; }
+    70% { transform: scale(1.4); opacity: 0; }
+    100% { transform: scale(1); opacity: 0; }
 }
 
 
@@ -127,6 +163,9 @@ h1, h2, h3 {
 /*  4. LAYOUT & GRID   */
 /* ------------------- */
 header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   text-align: center;
   padding: 30px 20px;
   margin-bottom: 30px;
@@ -136,9 +175,39 @@ header {
   border-radius: 15px;
   box-shadow: 0 10px 30px var(--shadow);
 }
+.header-content {
+    flex-grow: 1;
+}
+
+/* NEW: Theme Toggle Button */
+.theme-toggle {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    cursor: pointer;
+    color: white;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.3s;
+    flex-shrink: 0;
+    margin-left: 20px;
+}
+.theme-toggle:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+.theme-toggle .fa-sun { display: none; }
+.theme-toggle .fa-moon { display: block; }
+
+html.dark .theme-toggle .fa-sun { display: block; }
+html.dark .theme-toggle .fa-moon { display: none; }
+
 
 h1 {
-  font-size: clamp(1.8rem, 4vw, 2.8rem);
+  font-size: clamp(1.5rem, 4vw, 2.5rem);
   margin-bottom: 10px;
   text-shadow: 0 2px 4px rgba(0,0,0,0.3);
 }
@@ -204,6 +273,7 @@ footer {
 .day-header h3 {
   font-size: clamp(1.3rem, 3vw, 1.5rem);
   font-weight: 700;
+  /* FIX: Ensure color uses theme variable for visibility */
   color: var(--text-primary);
 }
 
@@ -330,6 +400,7 @@ html.dark .date-input { --is-dark: 1; }
   margin: 0;
 }
 .number-input[type=number] {
+  appearance: textfield;
   -moz-appearance: textfield;
 }
 
@@ -397,9 +468,68 @@ html.dark .date-input { --is-dark: 1; }
 }
 
 
-/* ------------------- */
-/*  6. PROGRESS SUMMARY */
-/* ------------------- */
+/* -------------------------- */
+/*  6. PROGRESS CALENDAR (NEW) */
+/* -------------------------- */
+.progress-calendar {
+    background: var(--card-bg);
+    border-radius: 15px;
+    padding: 25px;
+    box-shadow: 0 8px 25px var(--shadow);
+    margin-bottom: 40px;
+}
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(45px, 1fr));
+    gap: 10px;
+    margin-bottom: 20px;
+}
+.calendar-day {
+    aspect-ratio: 1 / 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    font-weight: 600;
+    background-color: var(--accent-primary-faded);
+    border: 2px solid var(--border-color);
+    color: var(--text-secondary);
+    transition: all 0.3s ease;
+}
+.calendar-day.completed {
+    background-color: var(--accent-secondary-faded);
+    border-color: var(--accent-secondary);
+    color: var(--text-primary);
+}
+.calendar-legend {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+.calendar-legend span {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.legend-dot {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: var(--accent-primary-faded);
+    border: 1px solid var(--border-color);
+}
+.legend-dot.completed {
+    background-color: var(--accent-secondary-faded);
+    border-color: var(--accent-secondary);
+}
+
+
+/* ----------------------- */
+/*  7. PROGRESS SUMMARY (MOVED) */
+/* ----------------------- */
 .progress-section {
   background: var(--card-bg);
   border-radius: 15px;
@@ -456,7 +586,7 @@ html.dark .date-input { --is-dark: 1; }
 
 
 /* ------------------- */
-/*  7. RESPONSIVENESS  */
+/*  8. RESPONSIVENESS  */
 /* ------------------- */
 @media (max-width: 768px) {
     .controls {
@@ -466,11 +596,19 @@ html.dark .date-input { --is-dark: 1; }
     .tracker-container {
         grid-template-columns: 1fr;
     }
+    header {
+        flex-direction: column;
+        gap: 15px;
+    }
+    .theme-toggle {
+        margin-left: 0;
+    }
 }
 
 @media (max-width: 480px) {
     body {
         padding: 10px;
+        padding-bottom: 90px;
     }
     header {
         padding: 20px 15px;

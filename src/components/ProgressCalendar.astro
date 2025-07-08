@@ -1,0 +1,16 @@
+---
+---
+<div class="progress-calendar">
+    <h2 class="progress-title">30-Day Progress Calendar</h2>
+    <div class="calendar-grid" id="progressCalendarGrid">
+        {Array.from({ length: 30 }).map((_, i) => (
+            <div class="calendar-day" data-calendar-day={i + 1}>
+                {i + 1}
+            </div>
+        ))}
+    </div>
+    <div class="calendar-legend">
+        <span><i class="legend-dot"></i> Not Started</span>
+        <span><i class="legend-dot completed"></i> Workout Logged</span>
+    </div>
+</div>
