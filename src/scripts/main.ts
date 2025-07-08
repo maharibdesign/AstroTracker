@@ -22,7 +22,7 @@ export interface DayData {
 class AstroTrackerApp {
     private trackerData: DayData[] = [];
     private isDirty = false;
-    private isExporting = false; // To prevent multiple clicks while exporting
+    private isExporting = false;
     private readonly TOTAL_DAYS = 30;
     private readonly WATER_GOAL = 2.5;
     private readonly SLEEP_GOAL = 8;
@@ -36,11 +36,16 @@ class AstroTrackerApp {
     }
 
     private initTelegram() {
-        try {
-            const tg = window.Telegram.WebApp;
-            tg.ready();
-            tg.onEvent('themeChanged', () => this.handleThemeChangeFromTelegram());
-        } catch (e) {
+        // FIX: Explicitly check for window.Telegram before using it.
+        if (window.Telegram) {
+            try {
+                const tg = window.Telegram.WebApp;
+                tg.ready();
+                tg.onEvent('themeChanged', () => this.handleThemeChangeFromTelegram());
+            } catch (e) {
+                console.error("Error initializing Telegram App:", e);
+            }
+        } else {
             console.log("Telegram Web App not found, running in standalone mode.");
         }
     }
@@ -59,9 +64,12 @@ class AstroTrackerApp {
     }
     
     private handleThemeChangeFromTelegram() {
-        try {
-            this.applyTheme(window.Telegram.WebApp.colorScheme);
-        } catch(e) { /* Failsafe */ }
+        // FIX: Explicitly check for window.Telegram before using it.
+        if (window.Telegram) {
+            try {
+                this.applyTheme(window.Telegram.WebApp.colorScheme);
+            } catch(e) { /* Failsafe */ }
+        }
     }
 
 
@@ -264,7 +272,7 @@ class AstroTrackerApp {
 
     // --- PDF EXPORT (FINAL VERSION) ---
     private async exportToPDF() {
-        if (this.isExporting) return; // Prevent multiple clicks
+        if (this.isExporting) return;
         this.isExporting = true;
         this.showNotification('Generating PDF report...', 'info');
 
@@ -288,10 +296,10 @@ class AstroTrackerApp {
         });
 
         try {
-            if (window.Telegram && window.Telegram.WebApp.initDataUnsafe?.user?.id) {
+            // FIX: Explicitly check for Telegram and user ID before proceeding.
+            if (window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
                 // --- TELEGRAM MINI APP LOGIC ---
                 const userId = window.Telegram.WebApp.initDataUnsafe.user.id.toString();
-                // Get PDF as a Base64 string, removing the prefix
                 const pdfBase64 = doc.output('datauristring').split(',')[1];
                 
                 const response = await fetch('/api/send-pdf', {
@@ -301,15 +309,15 @@ class AstroTrackerApp {
                 });
 
                 if (!response.ok) {
-                    throw new Error(`Server responded with status: ${response.status}`);
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || `Server responded with status: ${response.status}`);
                 }
                 
                 this.showNotification('Report sent to your chat!', 'success');
-                // Close the Mini App window for a great UX
                 window.Telegram.WebApp.close();
 
             } else {
-                throw new Error("Not in Telegram, using standard download.");
+                throw new Error("Not in Telegram or user info not available.");
             }
         } catch (error) {
             // --- STANDARD BROWSER FALLBACK LOGIC ---
@@ -357,7 +365,7 @@ class AstroTrackerApp {
     }
 }
 
-//   Instantiate the app once the DOM is ready
+// Instantiate the app once the DOM is ready
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => new AstroTrackerApp());
 } else {
